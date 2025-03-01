@@ -1,5 +1,9 @@
-# Ignore Gradle project-specific cache directory
+# Existing entries
 .gradle
-
-# Ignore Gradle build output directory
 build
+
+# H2 Database files
+database/
+*.db
+*.trace.db
+*.lock.db

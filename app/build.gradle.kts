@@ -27,6 +27,7 @@ dependencies {
     
     // Add Javalin dependencies
     implementation("io.javalin:javalin:6.4.0")
+    implementation("io.javalin:javalin-bundle:6.4.0")
     implementation("org.slf4j:slf4j-simple:2.0.7")
     
     // Add H2 Database
@@ -44,6 +45,9 @@ dependencies {
     
     // Add template engine
     implementation("org.thymeleaf:thymeleaf:3.1.2.RELEASE")
+    
+    // JPA and Hibernate
+    implementation("jakarta.persistence:jakarta.persistence-api:3.1.0")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

@@ -2,22 +2,57 @@ package parcial;
 
 import io.javalin.Javalin;
 import io.javalin.http.staticfiles.Location;
+import io.javalin.plugin.bundled.CorsPluginConfig;
+import parcial.config.DatabaseConfig;
+import org.h2.tools.Server;
+import java.sql.SQLException;
 
 public class App {
     private static final String STATIC_FILES_DIR = "/public";
     private static final int PORT = 7070;
 
     public static void main(String[] args) {
+        // Initialize database first
+        DatabaseConfig.init();
+
+        // Create H2 Console Server
+        Server h2Server = null;
+        try {
+            h2Server = Server.createWebServer("-web", "-webAllowOthers", "-webPort", "8082", "-ifNotExists");
+            h2Server.start();
+            System.out.println("H2 Console available at http://localhost:8082");
+        } catch (SQLException e) {
+            System.err.println("Failed to start H2 Console: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         Javalin app = Javalin.create(config -> {
-            config.staticFiles.add(STATIC_FILES_DIR, Location.CLASSPATH);
-            config.plugins.enableCors(cors -> cors.add(it -> {
-                it.anyHost();
-            }));
+            // Configure static files
+            config.staticFiles.add(staticFiles -> {
+                staticFiles.directory = STATIC_FILES_DIR;
+                staticFiles.location = Location.CLASSPATH;
+            });
+
+            // Configure CORS with new syntax
+            config.bundledPlugins.enableCors(cors -> {
+                cors.addRule(it -> {
+                    it.anyHost();
+                });
+            });
         }).start(PORT);
 
         // Initialize controllers
         new SurveyController(app);
 
         System.out.println("Server running on http://localhost:" + PORT);
+
+        // Add shutdown hook for cleanup
+        final Server finalH2Server = h2Server;
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (finalH2Server != null) {
+                finalH2Server.stop();
+            }
+            DatabaseConfig.shutdown();
+        }));
     }
 }
