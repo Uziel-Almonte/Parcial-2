@@ -8,6 +8,7 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     application
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 repositories {
@@ -23,6 +24,26 @@ dependencies {
 
     // This dependency is used by the application.
     implementation(libs.guava)
+    
+    // Add Javalin dependencies
+    implementation("io.javalin:javalin:6.4.0")
+    implementation("org.slf4j:slf4j-simple:2.0.7")
+    
+    // Add H2 Database
+    implementation("com.h2database:h2:2.2.224")
+    
+    // Add Hibernate (ORM)
+    implementation("org.hibernate:hibernate-core:6.4.4.Final")
+    
+    // Add JSON support
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+    
+    // Add websocket support
+    implementation("org.eclipse.jetty.websocket:websocket-server:9.4.51.v20230217")
+    implementation("org.eclipse.jetty.websocket:websocket-servlet:9.4.51.v20230217")
+    
+    // Add template engine
+    implementation("org.thymeleaf:thymeleaf:3.1.2.RELEASE")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
