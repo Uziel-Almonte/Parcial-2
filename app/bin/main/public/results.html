@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survey Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Survey Results</h2>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h3>Statistics</h3>
+                <div id="statistics" class="card">
+                    <div class="card-body">
+                        <p>Total Surveys: <span id="totalSurveys">0</span></p>
+                        <h4>Education Levels</h4>
+                        <ul id="educationStats" class="list-group">
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h3>Survey Locations</h3>
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h3>Survey List</h3>
+            <div id="surveyList" class="list-group">
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let markers = [];
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([19.4517, -70.6967], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // Load and display surveys
+        async function loadSurveys() {
+            try {
+                const response = await fetch('/survey');
+                const surveys = await response.json();
+                
+                displaySurveys(surveys);
+                updateStatistics(surveys);
+                displayMarkers(surveys);
+            } catch (error) {
+                console.error('Error loading surveys:', error);
+            }
+        }
+
+        // Display surveys in list
+        function displaySurveys(surveys) {
+            const container = document.getElementById('surveyList');
+            container.innerHTML = '';
+            
+            surveys.forEach(survey => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item';
+                item.innerHTML = `
+                    <h5>${survey.name}</h5>
+                    <p>Sector: ${survey.sector}</p>
+                    <p>Education: ${survey.educationLevel}</p>
+                    <p>Registered by: ${survey.registeredBy}</p>
+                    <p>Date: ${new Date(survey.timestamp).toLocaleString()}</p>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Update statistics
+        function updateStatistics(surveys) {
+            document.getElementById('totalSurveys').textContent = surveys.length;
+            
+            const educationStats = surveys.reduce((acc, survey) => {
+                acc[survey.educationLevel] = (acc[survey.educationLevel] || 0) + 1;
+                return acc;
+            }, {});
+            
+            const statsContainer = document.getElementById('educationStats');
+            statsContainer.innerHTML = '';
+            
+            Object.entries(educationStats).forEach(([level, count]) => {
+                const item = document.createElement('li');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    ${level}
+                    <span class="badge bg-primary rounded-pill">${count}</span>
+                `;
+                statsContainer.appendChild(item);
+            });
+        }
+
+        // Display markers on map
+        function displayMarkers(surveys) {
+            markers.forEach(marker => marker.remove());
+            markers = [];
+            
+            surveys.forEach(survey => {
+                if (survey.latitude && survey.longitude) {
+                    const marker = L.marker([survey.latitude, survey.longitude])
+                        .bindPopup(`
+                            <b>${survey.name}</b><br>
+                            Sector: ${survey.sector}<br>
+                            Education: ${survey.educationLevel}
+                        `)
+                        .addTo(map);
+                    markers.push(marker);
+                }
+            });
+            
+            if (markers.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds());
+            }
+        }
+
+        // Initialize
+        initMap();
+        loadSurveys();
+
+        // Refresh data periodically
+        setInterval(loadSurveys, 30000);
+    </script>
+</body>
+</html>

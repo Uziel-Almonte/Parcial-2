@@ -27,10 +27,10 @@ public class App {
         }
 
         Javalin app = Javalin.create(config -> {
-            // Configure static files
             config.staticFiles.add(staticFiles -> {
                 staticFiles.directory = STATIC_FILES_DIR;
                 staticFiles.location = Location.CLASSPATH;
+                staticFiles.hostedPath = "/";
             });
 
             // Configure CORS with new syntax
