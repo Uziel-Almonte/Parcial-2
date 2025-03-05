@@ -55,4 +55,8 @@ public class App {
             DatabaseConfig.shutdown();
         }));
     }
+
+    public String getGreeting() {
+        return "Hello World!";
+    }
 }
