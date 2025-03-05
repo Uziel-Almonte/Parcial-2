@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import parcial.config.DatabaseConfig;
 import parcial.models.LoginRequest;
+import parcial.models.RegisterRequest;
 import parcial.Survey; // Updated import to match Survey location
 
 public class SurveyController {
@@ -19,7 +20,7 @@ public class SurveyController {
 
         // Add authentication middleware
         app.before("/api/*", ctx -> {
-            if (!ctx.path().equals("/api/auth/login")) {
+            if (!ctx.path().equals("/api/auth/login") && !ctx.path().equals("/api/auth/register")) {
                 String token = ctx.header("Authorization");
                 if (token == null || !token.startsWith("Bearer ")) {
                     ctx.status(401).result("Unauthorized");
@@ -29,6 +30,7 @@ public class SurveyController {
 
         // Define routes with consistent API paths
         app.post("/api/auth/login", this::login);
+        app.post("/api/auth/register", this::register);
         app.post("/api/surveys", this::createSurvey);
         app.get("/api/surveys", this::getAllSurveys);
         app.get("/api/surveys/{id}", this::getSurveyById);
@@ -47,6 +49,22 @@ public class SurveyController {
                         "username", loginRequest.getUsername()));
             } else {
                 ctx.status(401).result("Invalid credentials");
+            }
+        } catch (Exception e) {
+            ctx.status(400).result("Invalid request format");
+        }
+    }
+
+    private void register(Context ctx) {
+        try {
+            RegisterRequest registerRequest = ctx.bodyAsClass(RegisterRequest.class);
+            // Simple registration logic for demo purposes
+            if (registerRequest.getUsername() != null && registerRequest.getPassword() != null) {
+                // Save user to database (this is a simple example, you should hash passwords in a real app)
+                // For now, we just return a success message
+                ctx.status(201).result("User registered successfully");
+            } else {
+                ctx.status(400).result("Invalid registration details");
             }
         } catch (Exception e) {
             ctx.status(400).result("Invalid request format");
