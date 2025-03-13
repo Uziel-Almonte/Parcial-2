@@ -1,26 +1,28 @@
 package parcial;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.Transaction;
 import parcial.config.DatabaseConfig;
+
 import java.util.List;
 
 public class SurveyRepository {
-    private final EntityManager entityManager;
+    private final SessionFactory sessionFactory;
 
     public SurveyRepository() {
-        this.entityManager = DatabaseConfig.getEntityManager();
+        this.sessionFactory = DatabaseConfig.getSessionFactory();
     }
 
     public Survey save(Survey survey) {
-        EntityTransaction transaction = entityManager.getTransaction();
-        try {
-            transaction.begin();
-            entityManager.persist(survey);
+        Transaction transaction = null;
+        try (Session session = sessionFactory.openSession()) {
+            transaction = session.beginTransaction();
+            session.persist(survey);
             transaction.commit();
             return survey;
         } catch (Exception e) {
-            if (transaction.isActive()) {
+            if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             throw e;
@@ -28,25 +30,28 @@ public class SurveyRepository {
     }
 
     public Survey findById(Long id) {
-        return entityManager.find(Survey.class, id);
+        try (Session session = sessionFactory.openSession()) {
+            return session.get(Survey.class, id);
+        }
     }
 
     public List<Survey> findAll() {
-        return entityManager.createQuery("SELECT s FROM Survey s", Survey.class)
-                .getResultList();
+        try (Session session = sessionFactory.openSession()) {
+            return session.createQuery("FROM Survey", Survey.class).list();
+        }
     }
 
     public void delete(Long id) {
-        EntityTransaction transaction = entityManager.getTransaction();
-        try {
-            transaction.begin();
-            Survey survey = findById(id);
+        Transaction transaction = null;
+        try (Session session = sessionFactory.openSession()) {
+            transaction = session.beginTransaction();
+            Survey survey = session.get(Survey.class, id);
             if (survey != null) {
-                entityManager.remove(survey);
+                session.remove(survey);
             }
             transaction.commit();
         } catch (Exception e) {
-            if (transaction.isActive()) {
+            if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             throw e;
@@ -54,14 +59,14 @@ public class SurveyRepository {
     }
 
     public Survey update(Survey survey) {
-        EntityTransaction transaction = entityManager.getTransaction();
-        try {
-            transaction.begin();
-            Survey updatedSurvey = entityManager.merge(survey);
+        Transaction transaction = null;
+        try (Session session = sessionFactory.openSession()) {
+            transaction = session.beginTransaction();
+            Survey updatedSurvey = session.merge(survey);
             transaction.commit();
             return updatedSurvey;
         } catch (Exception e) {
-            if (transaction.isActive()) {
+            if (transaction != null && transaction.isActive()) {
                 transaction.rollback();
             }
             throw e;

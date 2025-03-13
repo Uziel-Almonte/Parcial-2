@@ -2,21 +2,24 @@ package parcial;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.Transaction;
+import parcial.config.DatabaseConfig;
+import parcial.User;
+
+import javax.servlet.http.Cookie;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import parcial.config.DatabaseConfig;
-import parcial.models.LoginRequest;
-import parcial.models.RegisterRequest;
-import parcial.Survey; // Updated import to match Survey location
 
 public class SurveyController {
-    private final EntityManager entityManager;
+    private final SessionFactory sessionFactory;
+    private final UserService userService;
 
     public SurveyController(Javalin app) {
-        this.entityManager = DatabaseConfig.getEntityManager();
+        this.sessionFactory = DatabaseConfig.getSessionFactory();
+        this.userService = new UserService();
 
         // Add authentication middleware
         app.before("/api/*", ctx -> {
@@ -40,10 +43,13 @@ public class SurveyController {
 
     private void login(Context ctx) {
         try {
-            LoginRequest loginRequest = ctx.bodyAsClass(LoginRequest.class);
-            // Simple authentication for demo purposes
-            if ("admin".equals(loginRequest.getUsername()) && "password".equals(loginRequest.getPassword())) {
-                String token = generateToken(loginRequest.getUsername());
+            User loginRequest = ctx.bodyAsClass(User.class);
+            Long userID = userService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
+            if (userID != null) {
+                ctx.sessionAttribute("user_id", userID);
+                String token = userService.generateRememberMeToken(loginRequest);
+                ctx.cookie("rememberMeToken", token, 60 * 60 * 24 * 30);
+                //ctx.res().addCookie(cookie);
                 ctx.json(Map.of(
                         "token", token,
                         "username", loginRequest.getUsername()));
@@ -57,11 +63,13 @@ public class SurveyController {
 
     private void register(Context ctx) {
         try {
-            RegisterRequest registerRequest = ctx.bodyAsClass(RegisterRequest.class);
-            // Simple registration logic for demo purposes
+            User registerRequest = ctx.bodyAsClass(User.class);
             if (registerRequest.getUsername() != null && registerRequest.getPassword() != null) {
-                // Save user to database (this is a simple example, you should hash passwords in a real app)
-                // For now, we just return a success message
+                Session session = sessionFactory.openSession();
+                Transaction transaction = session.beginTransaction();
+                session.persist(registerRequest);
+                transaction.commit();
+                session.close();
                 ctx.status(201).result("User registered successfully");
             } else {
                 ctx.status(400).result("Invalid registration details");
@@ -72,13 +80,13 @@ public class SurveyController {
     }
 
     private void createSurvey(Context ctx) {
-        EntityTransaction transaction = entityManager.getTransaction();
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
         try {
             Survey survey = ctx.bodyAsClass(Survey.class);
             survey.setTimestamp(new Date());
 
-            transaction.begin();
-            entityManager.persist(survey);
+            session.persist(survey);
             transaction.commit();
 
             ctx.status(201).json(survey);
@@ -87,24 +95,28 @@ public class SurveyController {
                 transaction.rollback();
             }
             ctx.status(500).result("Error creating survey: " + e.getMessage());
+        } finally {
+            session.close();
         }
     }
 
     private void getAllSurveys(Context ctx) {
+        Session session = sessionFactory.openSession();
         try {
-            List<Survey> surveys = entityManager
-                    .createQuery("SELECT s FROM Survey s ORDER BY s.timestamp DESC", Survey.class)
-                    .getResultList();
+            List<Survey> surveys = session.createQuery("FROM Survey ORDER BY timestamp DESC", Survey.class).list();
             ctx.json(surveys);
         } catch (Exception e) {
             ctx.status(500).result("Error fetching surveys: " + e.getMessage());
+        } finally {
+            session.close();
         }
     }
 
     private void getSurveyById(Context ctx) {
+        Session session = sessionFactory.openSession();
         try {
             Long id = ctx.pathParamAsClass("id", Long.class).get();
-            Survey survey = entityManager.find(Survey.class, id);
+            Survey survey = session.get(Survey.class, id);
 
             if (survey != null) {
                 ctx.json(survey);
@@ -113,23 +125,25 @@ public class SurveyController {
             }
         } catch (Exception e) {
             ctx.status(400).result("Invalid survey ID");
+        } finally {
+            session.close();
         }
     }
 
     private void updateSurvey(Context ctx) {
-        EntityTransaction transaction = entityManager.getTransaction();
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
         try {
             Long id = ctx.pathParamAsClass("id", Long.class).get();
             Survey updatedSurvey = ctx.bodyAsClass(Survey.class);
             updatedSurvey.setId(id);
 
-            transaction.begin();
-            Survey existingSurvey = entityManager.find(Survey.class, id);
+            Survey existingSurvey = session.get(Survey.class, id);
             if (existingSurvey == null) {
                 ctx.status(404).result("Survey not found");
                 return;
             }
-            entityManager.merge(updatedSurvey);
+            session.merge(updatedSurvey);
             transaction.commit();
 
             ctx.json(updatedSurvey);
@@ -138,18 +152,20 @@ public class SurveyController {
                 transaction.rollback();
             }
             ctx.status(500).result("Error updating survey: " + e.getMessage());
+        } finally {
+            session.close();
         }
     }
 
     private void deleteSurvey(Context ctx) {
-        EntityTransaction transaction = entityManager.getTransaction();
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
         try {
             Long id = ctx.pathParamAsClass("id", Long.class).get();
 
-            transaction.begin();
-            Survey survey = entityManager.find(Survey.class, id);
+            Survey survey = session.get(Survey.class, id);
             if (survey != null) {
-                entityManager.remove(survey);
+                session.remove(survey);
                 transaction.commit();
                 ctx.status(204);
             } else {
@@ -160,6 +176,8 @@ public class SurveyController {
                 transaction.rollback();
             }
             ctx.status(500).result("Error deleting survey: " + e.getMessage());
+        } finally {
+            session.close();
         }
     }
 

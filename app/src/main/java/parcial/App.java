@@ -5,13 +5,17 @@ import io.javalin.http.staticfiles.Location;
 import io.javalin.plugin.bundled.CorsPluginConfig;
 import parcial.config.DatabaseConfig;
 import org.h2.tools.Server;
+import org.hibernate.SessionFactory;
 import java.sql.SQLException;
 
 public class App {
     private static final String STATIC_FILES_DIR = "/public";
-    private static final int PORT = 7070;
+    private static final int PORT = 7000;
 
     public static void main(String[] args) {
+        // Initialize the sessionFactory
+        //SessionFactory sessionFactory = DatabaseConfig.getSessionFactory();
+
         // Initialize database first
         DatabaseConfig.init();
 

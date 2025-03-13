@@ -33,6 +33,9 @@ dependencies {
     // Add H2 Database
     implementation("com.h2database:h2:2.2.224")
     
+    // JPA and Hibernate
+    implementation("jakarta.persistence:jakarta.persistence-api:3.1.0")
+    
     // Add Hibernate (ORM)
     implementation("org.hibernate:hibernate-core:6.4.4.Final")
     
@@ -45,9 +48,9 @@ dependencies {
     
     // Add template engine
     implementation("org.thymeleaf:thymeleaf:3.1.2.RELEASE")
-    
-    // JPA and Hibernate
-    implementation("jakarta.persistence:jakarta.persistence-api:3.1.0")
+
+    // Add javax.servlet dependency
+    implementation("javax.servlet:javax.servlet-api:4.0.1")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
