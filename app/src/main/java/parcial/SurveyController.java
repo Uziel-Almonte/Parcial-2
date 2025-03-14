@@ -44,22 +44,38 @@ public class SurveyController {
     private void login(Context ctx) {
         try {
             User loginRequest = ctx.bodyAsClass(User.class);
-            Long userID = userService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
-            if (userID != null) {
-                ctx.sessionAttribute("user_id", userID);
-                String token = userService.generateRememberMeToken(loginRequest);
+            Long userId = userService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
+            if (userId != null) {
+                // Generate or reuse the rememberMeToken
+                String token = userService.generateRememberMeToken(userId);
+    
+                // Set session attribute and cookie
+                ctx.sessionAttribute("user_id", userId);
                 ctx.cookie("rememberMeToken", token, 60 * 60 * 24 * 30);
-                //ctx.res().addCookie(cookie);
+    
+                // Respond with token and username
                 ctx.json(Map.of(
                         "token", token,
-                        "username", loginRequest.getUsername()));
+                        "username", loginRequest.getUsername()
+                ));
+                System.out.println("LOGIN SUCCESSFUL");
             } else {
                 ctx.status(401).result("Invalid credentials");
             }
         } catch (Exception e) {
             ctx.status(400).result("Invalid request format");
+            e.printStackTrace();
         }
     }
+
+    public User getUserByRememberMeToken(String token) {
+    try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
+        return session.createQuery("FROM User WHERE rememberMeToken = :token", User.class)
+                .setParameter("token", token)
+                .uniqueResult();
+    }
+}
+
 
     private void register(Context ctx) {
         try {

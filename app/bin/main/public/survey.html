@@ -193,7 +193,7 @@
 
         // Add this after the existing scripts
         const db = new Dexie('surveyDB');
-        db.version(1).stores({
+        db.version(11).stores({
             surveys: '++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp,synced'
         });
 

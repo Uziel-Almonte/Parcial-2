@@ -38,6 +38,8 @@ dependencies {
     
     // Add Hibernate (ORM)
     implementation("org.hibernate:hibernate-core:6.4.4.Final")
+
+    implementation("org.mindrot:jbcrypt:0.4")
     
     // Add JSON support
     implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
