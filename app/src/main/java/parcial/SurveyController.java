@@ -96,23 +96,19 @@ public class SurveyController {
     }
 
     private void createSurvey(Context ctx) {
-        Session session = sessionFactory.openSession();
-        Transaction transaction = session.beginTransaction();
         try {
-            Survey survey = ctx.bodyAsClass(Survey.class);
-            survey.setTimestamp(new Date());
+            Survey survey = ctx.bodyAsClass(Survey.class); // Parse survey from request body
 
-            session.persist(survey);
-            transaction.commit();
-
-            ctx.status(201).json(survey);
-        } catch (Exception e) {
-            if (transaction.isActive()) {
-                transaction.rollback();
+            try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
+                Transaction transaction = session.beginTransaction();
+                session.persist(survey); // Save survey to the database
+                transaction.commit();
             }
-            ctx.status(500).result("Error creating survey: " + e.getMessage());
-        } finally {
-            session.close();
+
+            ctx.status(201).json(Map.of("message", "Survey saved successfully!"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            ctx.status(500).json(Map.of("error", "Failed to save survey."));
         }
     }
 

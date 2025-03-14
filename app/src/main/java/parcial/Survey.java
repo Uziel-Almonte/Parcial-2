@@ -3,6 +3,8 @@ package parcial;
 import jakarta.persistence.*;
 import java.util.Date;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Entity
 @Table(name = "surveys")
 public class Survey {
@@ -29,6 +31,8 @@ public class Survey {
     @Temporal(TemporalType.TIMESTAMP)
     @Column(nullable = false)
     private Date timestamp;
+
+    private Boolean synced;
 
     public enum EducationLevel {
         BASIC,
@@ -100,5 +104,21 @@ public class Survey {
 
     public void setTimestamp(Date timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String toJson() {
+        try {
+            return new ObjectMapper().writeValueAsString(this);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    public Boolean getSynced() {
+        return synced;
+    }
+
+    public void setSynced(Boolean synced) {
+        this.synced = synced;
     }
 }
