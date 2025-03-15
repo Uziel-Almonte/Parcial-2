@@ -33,8 +33,6 @@ public class Survey {
     @Column(nullable = false)
     private Date timestamp;
 
-    private Boolean synced;
-
     public enum EducationLevel {
         BASIC,
         MEDIUM,
@@ -125,13 +123,5 @@ public class Survey {
         } catch (Exception e) {
             return "{}";
         }
-    }
-
-    public Boolean getSynced() {
-        return synced;
-    }
-
-    public void setSynced(Boolean synced) {
-        this.synced = synced;
     }
 }

@@ -146,12 +146,12 @@
                     registeredBy: localStorage.getItem('username') || 'anonymous',
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
-                    timestamp: new Date(),
-                    synced: false // Start as unsynced until confirmed saved
+                    timestamp: new Date()
+                    // Remove synced property
                 };
 
                 await saveSurvey(survey);
-                alert('Survey saved successfully!' + (Offline.state === 'up' ? '' : ' It will be synced when you are back online.'));
+                alert('Survey saved successfully!' + (Offline.state === 'up' ? '' : ' It will be saved locally and uploaded when online.'));
                 updateStoredSurveys();
                 e.target.reset();
             } catch (error) {
@@ -165,14 +165,11 @@
                 // Always generate a unique ID for the survey
                 const id = Date.now().toString();
                 
-                // Set synced status based on offline.js status
-                survey.synced = false;
-                
                 // Always save locally first
                 await surveyStore.setItem(id, survey);
                 console.log('Survey saved locally with ID:', id);
                 
-                // If online (using offline.js), try to sync immediately
+                // If online, try to send to server immediately
                 if (Offline.state === 'up') {
                     try {
                         const response = await fetch('/api/surveys', {
@@ -186,26 +183,25 @@
 
                         if (response.ok) {
                             const savedSurvey = await response.json();
-                            console.log('Survey synced to server:', savedSurvey);
+                            console.log('Survey sent to server:', savedSurvey);
                             
-                            // Update local copy with synced status
-                            survey.synced = true;
-                            await surveyStore.setItem(id, survey);
+                            // Remove from local storage since it's on the server
+                            await surveyStore.removeItem(id);
                             
-                            // Update UI to show synced status
+                            // Update UI
                             updateStoredSurveys();
                         } else {
-                            console.error('Failed to sync survey to server:', await response.text());
+                            console.error('Failed to send survey to server:', await response.text());
                         }
                     } catch (error) {
-                        console.error('Error syncing survey:', error);
-                        // Keep the survey marked as unsynced
+                        console.error('Error sending survey:', error);
+                        // Keep the survey in local storage
                     }
                 } else {
-                    console.log('Offline mode (detected by offline.js): Survey will sync when connection is restored');
+                    console.log('Offline mode: Survey saved locally and will be sent when online');
                 }
                 
-                return id; // Return the ID of the saved survey
+                return id;
             } catch (error) {
                 console.error('Error in saveSurvey:', error);
                 throw error;
@@ -220,40 +216,40 @@
             }
 
             const keys = await surveyStore.keys();
+            let syncedCount = 0;
+            
             for (const key of keys) {
                 const survey = await surveyStore.getItem(key);
-                if (!survey.synced) {
-                    try {
-                        console.log("Attempting to sync survey:", survey);
-                        const response = await fetch('/api/surveys', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('token')}`
-                            },
-                            body: JSON.stringify(survey)
-                        });
+                
+                try {
+                    console.log("Attempting to send locally stored survey:", survey);
+                    
+                    const response = await fetch('/api/surveys', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify(survey)
+                    });
 
-                        if (response.ok) {
-                            const savedSurvey = await response.json();
-                            console.log('Survey synced successfully:', savedSurvey);
-                            
-                            survey.synced = true;
-                            await surveyStore.setItem(key, survey);
-                            
-                            // Broadcast updated survey status to WebSocket if needed
-                            console.log('Survey marked as synced in local storage');
-                        } else {
-                            console.error('Failed to sync survey:', await response.text());
-                        }
-                    } catch (error) {
-                        console.error('Sync error:', error);
+                    if (response.ok) {
+                        const savedSurvey = await response.json();
+                        console.log('Survey uploaded successfully:', savedSurvey);
+                        
+                        // Remove from local storage
+                        await surveyStore.removeItem(key);
+                        syncedCount++;
+                    } else {
+                        console.error('Failed to upload survey:', await response.text());
                     }
+                } catch (error) {
+                    console.error('Upload error:', error);
                 }
             }
             
             updateStoredSurveys();
-            console.log('Sync complete');
+            console.log(`Sync complete: ${syncedCount} surveys uploaded`);
         }
 
         // Update stored surveys list
@@ -262,17 +258,44 @@
             container.innerHTML = '';
             
             const keys = await surveyStore.keys();
+            
+            if (keys.length === 0) {
+                container.innerHTML = '<p class="text-muted">No locally stored surveys</p>';
+                return;
+            }
+            
+            // Update heading text
+            const heading = document.querySelector('.mt-4 h3');
+            if (heading) {
+                heading.textContent = Offline.state === 'down' ? 
+                    'Locally Stored Surveys (Offline)' : 
+                    'Locally Stored Surveys';
+            }
+            
             for (const key of keys) {
                 const survey = await surveyStore.getItem(key);
                 const item = document.createElement('div');
                 item.className = 'list-group-item';
+                
+                const date = new Date(survey.timestamp).toLocaleString();
+                
                 item.innerHTML = `
                     <h5>${survey.name}</h5>
                     <p>Sector: ${survey.sector}</p>
                     <p>Education: ${survey.educationLevel}</p>
-                    <p>Status: ${survey.synced ? 'Synced' : 'Pending'}</p>
+                    <p>Date: ${date}</p>
+                    <p>Status: <span class="badge bg-warning">Pending Upload</span></p>
                 `;
                 container.appendChild(item);
+            }
+            
+            // Add sync button if online
+            if (keys.length > 0 && Offline.state === 'up') {
+                const syncButton = document.createElement('button');
+                syncButton.className = 'btn btn-primary mt-3';
+                syncButton.textContent = `Upload ${keys.length} Pending Surveys`;
+                syncButton.onclick = syncData;
+                container.appendChild(syncButton);
             }
         }
 
@@ -283,7 +306,7 @@
         // Add this after the existing scripts
         const db = new Dexie('surveyDB');
         db.version(11).stores({
-            surveys: '++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp,synced'
+            surveys: '++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp'
         });
 
         function logout() {

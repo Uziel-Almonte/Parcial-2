@@ -36,8 +36,7 @@ public class SurveyController {
         app.post("/api/auth/login", this::login);
         app.post("/api/auth/register", this::register);
         app.post("/api/surveys", this::createSurvey);
-        //app.get("/api/surveys", this::getAllSurveys);
-        app.get("/api/surveys", this::getAllSyncedSurveys);
+        app.get("/api/surveys", this::getAllSurveys);
         app.get("/api/surveys/{id}", this::getSurveyById);
         app.put("/api/surveys/{id}", this::updateSurvey);
         app.delete("/api/surveys/{id}", this::deleteSurvey);
@@ -111,11 +110,6 @@ public class SurveyController {
             if (survey.getEducationLevel() == null) {
                 survey.setEducationLevel(Survey.EducationLevel.BASIC); // Use BASIC as default
             }
-            
-            // Ensure synced is set to true when saving to database
-            if (survey.getSynced() == null) {
-                survey.setSynced(true);
-            }
 
             try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
                 Transaction transaction = session.beginTransaction();
@@ -133,21 +127,10 @@ public class SurveyController {
     private void getAllSurveys(Context ctx) {
         try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
             List<Survey> surveys = session.createQuery("FROM Survey", Survey.class).list();
-            ctx.json(surveys); // Send surveys as JSON response
-        } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).json(Map.of("error", "Failed to retrieve surveys."));
-        }
-    }
-
-    private void getAllSyncedSurveys(Context ctx) {
-        try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
-            // Query only surveys with synced = true
-            List<Survey> surveys = session.createQuery("FROM Survey WHERE synced = true", Survey.class).list();
             ctx.json(surveys);
         } catch (Exception e) {
             e.printStackTrace();
-            ctx.status(500).json(Map.of("error", "Failed to retrieve synced surveys"));
+            ctx.status(500).json(Map.of("error", "Failed to retrieve surveys."));
         }
     }
 

@@ -1,42 +1,56 @@
 self.addEventListener("message", async (event) => {
     if (event.data === "syncSurveys") {
-        const unsyncedSurveys = await getUnsyncedSurveys();
-        for (const survey of unsyncedSurveys) {
+        const localSurveys = await getLocalSurveys();
+        let successCount = 0;
+        
+        for (const survey of localSurveys) {
             try {
-                const response = await fetch("/api/surveys", {
+                const response = await fetch("/api/surveys", { = await fetch("/api/surveys", {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${localStorage.getItem("token")}`
-                    },
-                    body: JSON.stringify(survey)
+                        "Content-Type": "application/json",  "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}` ${localStorage.getItem("token")}`
+                    }, },
+                    body: JSON.stringify(survey.data)                    body: JSON.stringify(survey.data)
                 });
 
                 if (response.ok) {
-                    await markSurveyAsSynced(survey.id);
-                    postMessage({ status: "success", survey });
-                } else {
-                    console.error("Failed to sync survey:", survey);
+                    await removeLocalSurvey(survey.id);t removeLocalSurvey(survey.id);
+                    successCount++;
+                    postMessage({ status: "success", survey: survey.id });   postMessage({ status: "success", survey: survey.id });
                 }
             } catch (error) {
-                console.error("Error syncing survey:", error);
-            }
-        }
+                console.error("Error syncing survey:", error);   console.error("Error syncing survey:", error);
+            }   }
+        }   }
+             
+        postMessage({        postMessage({
+            status: "complete",
+            uploaded: successCount,
+            remaining: localSurveys.length - successCountlSurveys.length - successCount
+        });
     }
 });
 
-async function getUnsyncedSurveys() {
+async function getLocalSurveys() {async function getLocalSurveys() {
     const db = new Dexie("surveyDB");
     db.version(12).stores({
-        surveys: "++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp,synced"
+        surveys: "++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp",sector,educationLevel,registeredBy,latitude,longitude,timestamp"
     });
-    return db.surveys.where("synced").equals(false).toArray();
+    return db.surveys.toArray();urn db.surveys.toArray();
 }
 
-async function markSurveyAsSynced(id) {
-    const db = new Dexie("surveyDB");
-    db.version(12).stores({
-        surveys: "++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp,synced"
+
+
+
+
+
+
+
+}    await db.surveys.delete(id);    });        surveys: "++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp"    db.version(12).stores({
+
+
+}    await db.surveys.delete(id);
     });
-    await db.surveys.update(id, { synced: true });
-}
+        surveys: "++id,name,sector,educationLevel,registeredBy,latitude,longitude,timestamp"    db.version(12).stores({    const db = new Dexie("surveyDB");async function removeLocalSurvey(id) {async function removeLocalSurvey(id) {
+    const db = new Dexie("surveyDB");
