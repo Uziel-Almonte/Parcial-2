@@ -16,6 +16,12 @@
             top: 0;
             width: 100%;
             z-index: 1000;
+            margin-bottom: 50px;
+        }
+
+        /* Hide offline.js UI elements */
+        .offline-ui {
+            display: none !important;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
@@ -23,10 +29,12 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/offline-js@0.7.19/themes/offline-theme-default.css">
 </head>
 <body>
+    <div>
+
+    </div>
     <div id="offline-indicator" class="offline-indicator">
         You are currently offline. Data will be saved locally.
     </div>
-
     <div class="container mt-5">
         <h2>PUCMM Survey Form</h2>
         <form id="surveyForm" class="needs-validation" novalidate>
@@ -77,16 +85,33 @@
         // Check online status
         function updateOnlineStatus() {
             const indicator = document.getElementById('offline-indicator');
+            const submitButton = document.querySelector('#surveyForm button[type="submit"]');
+            
             if (!navigator.onLine) {
+                // Offline mode
                 indicator.style.display = 'block';
+                indicator.textContent = 'You are currently offline. Surveys will be saved locally and synced when online.';
+                
+                // Update submit button to indicate offline mode
+                submitButton.classList.remove('btn-primary');
+                submitButton.classList.add('btn-warning');
+                submitButton.innerHTML = 'Submit (Offline Mode)';
             } else {
+                // Online mode
                 indicator.style.display = 'none';
+                
+                // Update submit button to indicate online mode
+                submitButton.classList.remove('btn-warning');
+                submitButton.classList.add('btn-primary');
+                submitButton.innerHTML = 'Submit';
+                
+                // Try to sync pending surveys
                 syncData();
             }
         }
 
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
+        //window.addEventListener('online', updateOnlineStatus);
+        //window.addEventListener('offline', updateOnlineStatus);
 
         // Get current position
         async function getCurrentPosition() {
@@ -105,12 +130,19 @@
         document.getElementById('surveyForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            // Check if education level is selected
+            const educationLevel = document.getElementById('educationLevel').value;
+            if (!educationLevel) {
+                alert('Please select an education level');
+                return;
+            }
+            
             try {
                 const position = await getCurrentPosition();
                 const survey = {
                     name: document.getElementById('name').value,
                     sector: document.getElementById('sector').value,
-                    educationLevel: document.getElementById('educationLevel').value,
+                    educationLevel: educationLevel,
                     registeredBy: localStorage.getItem('username') || 'anonymous',
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
@@ -119,7 +151,7 @@
                 };
 
                 await saveSurvey(survey);
-                alert('Survey saved successfully!');
+                alert('Survey saved successfully!' + (Offline.state === 'up' ? '' : ' It will be synced when you are back online.'));
                 updateStoredSurveys();
                 e.target.reset();
             } catch (error) {
@@ -130,32 +162,53 @@
         // Save survey
         async function saveSurvey(survey) {
             try {
-                // Save the survey locally
+                // Always generate a unique ID for the survey
                 const id = Date.now().toString();
+                
+                // Set synced status based on offline.js status
+                survey.synced = false;
+                
+                // Always save locally first
                 await surveyStore.setItem(id, survey);
+                console.log('Survey saved locally with ID:', id);
+                
+                // If online (using offline.js), try to sync immediately
+                if (Offline.state === 'up') {
+                    try {
+                        const response = await fetch('/api/surveys', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify(survey)
+                        });
 
-                // If online, send the survey to the backend
-                if (navigator.onLine) {
-                    const response = await fetch('/api/surveys', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify(survey)
-                    });
-
-                    if (response.ok) {
-                        const savedSurvey = await response.json();
-                        console.log('Survey saved to the server:', savedSurvey);
-                        survey.synced = true;
-                        await surveyStore.setItem(id, survey); // Update local storage
-                    } else {
-                        console.error('Failed to save survey to the server.');
+                        if (response.ok) {
+                            const savedSurvey = await response.json();
+                            console.log('Survey synced to server:', savedSurvey);
+                            
+                            // Update local copy with synced status
+                            survey.synced = true;
+                            await surveyStore.setItem(id, survey);
+                            
+                            // Update UI to show synced status
+                            updateStoredSurveys();
+                        } else {
+                            console.error('Failed to sync survey to server:', await response.text());
+                        }
+                    } catch (error) {
+                        console.error('Error syncing survey:', error);
+                        // Keep the survey marked as unsynced
                     }
+                } else {
+                    console.log('Offline mode (detected by offline.js): Survey will sync when connection is restored');
                 }
+                
+                return id; // Return the ID of the saved survey
             } catch (error) {
-                console.error('Error saving survey:', error);
+                console.error('Error in saveSurvey:', error);
+                throw error;
             }
         }
 
@@ -238,48 +291,165 @@
             localStorage.removeItem('username');
             window.location.href = '/login.html';
         }
+
+        // Configure offline.js
+        Offline.options = {
+            // Check connectivity every 5 seconds
+            checks: {xhr: {url: '/api/ping'}},
+            checkOnLoad: true,
+            interceptRequests: true,
+            reconnect: {
+                initialDelay: 3,
+                delay: 30
+            },
+            requests: true
+        };
+
+        // Listen to offline.js events instead of navigator.onLine
+        Offline.on('up', function() {
+            console.log('Connection is back');
+            handleConnectionUp();
+        });
+
+        Offline.on('down', function() {
+            console.log('Connection lost');
+            handleConnectionDown();
+        });
+
+        Offline.on('checking', function() {
+            console.log('Checking connection status');
+        });
+
+        Offline.on('reconnect:started', function() {
+            console.log('Starting reconnection');
+        });
+
+        Offline.on('reconnect:success', function() {
+            console.log('Successfully reconnected');
+            syncData(); // Try to sync when reconnection succeeds
+        });
+
+        // Replace updateOnlineStatus with these two handler functions
+        function handleConnectionUp() {
+            const submitButton = document.querySelector('#surveyForm button[type="submit"]');
+            const heading = document.querySelector('.mt-4 h3');
+            
+            // Hide our custom offline indicator (optional, as offline.js shows its own)
+            document.getElementById('offline-indicator').style.display = 'none';
+            
+            // Update heading to show we're displaying all surveys
+            if (heading) {
+                heading.textContent = 'Stored Surveys';
+            }
+            
+            // Update submit button to indicate online mode
+            submitButton.classList.remove('btn-warning');
+            submitButton.classList.add('btn-primary');
+            submitButton.innerHTML = 'Submit';
+            
+            // Try to sync pending surveys
+            syncData();
+            
+            // Refresh the survey list
+            updateStoredSurveys();
+            
+            // Hide offline indicator
+            document.getElementById('offline-indicator').style.display = 'none';
+            
+            // Remove the spacer
+            const spacer = document.getElementById('offline-spacer');
+            if (spacer) {
+                spacer.remove();
+            }
+        }
+
+        // Modify your handleConnectionDown function
+        function handleConnectionDown() {
+            const submitButton = document.querySelector('#surveyForm button[type="submit"]');
+            const heading = document.querySelector('.mt-4 h3');
+            
+            // Show our custom offline indicator (optional, as offline.js shows its own)
+            document.getElementById('offline-indicator').style.display = 'block';
+            document.getElementById('offline-indicator').style.marginBottom = "50px";
+            document.getElementById('offline-indicator').textContent = 
+                'You are currently offline. Surveys will be saved locally and synced when online.';
+            
+            // Update heading to show we're only displaying unsynced surveys
+            if (heading) {
+                heading.textContent = 'Pending Surveys (Offline Mode)';
+            }
+            
+            // Update submit button to indicate offline mode
+            submitButton.classList.remove('btn-primary');
+            submitButton.classList.add('btn-warning');
+            submitButton.innerHTML = 'Submit (Offline Mode)';
+            
+            // Refresh the survey list
+            updateStoredSurveys();
+            
+            // Show our custom offline indicator
+            document.getElementById('offline-indicator').style.display = 'block';
+            
+            // Add a spacer element after the indicator
+            let spacer = document.getElementById('offline-spacer');
+            if (!spacer) {
+                spacer = document.createElement('div');
+                spacer.id = 'offline-spacer';
+                spacer.style.height = '70px'; // Adjust this height as needed
+                document.body.insertBefore(spacer, document.querySelector('.container'));
+            }
+        }
+
+        // Initial update - once DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initial UI setup
+            if (Offline.state === 'down') {
+                handleConnectionDown();
+            } else {
+                handleConnectionUp();
+            }
+            updateStoredSurveys();
+        });
     </script>
     <script>
-        const ws = new WebSocket("ws://localhost:7000/ws/surveys");
+        let ws;
 
-        ws.onopen = () => {
-            console.log("Connected to WebSocket server.");
-        };
+        function setupWebSocket() {
+            ws = new WebSocket("ws://localhost:7000/ws/surveys");
 
-        ws.onmessage = (event) => {
-            const survey = JSON.parse(event.data);
-            console.log("New survey received:", survey);
+            ws.onopen = () => {
+                console.log("Connected to WebSocket server.");
+            };
 
-            // Add to the list
-            addSurveyToList(survey);
+            ws.onmessage = (event) => {
+                const survey = JSON.parse(event.data);
+                console.log("New survey received:", survey);
+                addSurveyToList(survey);
+            };
 
-            // Save locally if not already present
-            surveyStore.setItem(survey.id, survey).catch((error) => {
-                console.error("Error saving survey locally:", error);
-            });
-        };
+            ws.onclose = () => {
+                console.log("Disconnected from WebSocket server.");
+                if (Offline.state === 'up') {
+                    // Only try to reconnect if we're online
+                    setTimeout(setupWebSocket, 3000);
+                }
+            };
 
-        ws.onclose = () => {
-            console.log("Disconnected from WebSocket server.");
-        };
-
-        ws.onerror = (error) => {
-            console.error("WebSocket error:", error);
-        };
-
-        function addSurveyToList(survey) {
-            const container = document.getElementById('storedSurveys');
-            const item = document.createElement('div');
-            item.className = 'list-group-item';
-            item.innerHTML = `
-                <h5>${survey.name}</h5>
-                <p>Sector: ${survey.sector}</p>
-                <p>Education: ${survey.educationLevel}</p>
-                <p>Status: ${survey.synced ? 'Synced' : 'Pending'}</p>
-            `;
-            container.prepend(item); // Add the new survey to the top of the list
-            updateStoredSurveys(); // Refresh the list
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+            };
         }
+
+        // Initialize WebSocket connection
+        setupWebSocket();
+
+        // Reconnect WebSocket when connection comes back online
+        Offline.on('up', function() {
+            if (ws.readyState === WebSocket.CLOSED) {
+                console.log("Reconnecting WebSocket after connection restored");
+                setupWebSocket();
+            }
+        });
     </script>
     <script>
         if (window.Worker) {
