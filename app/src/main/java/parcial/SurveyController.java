@@ -6,6 +6,7 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
 import parcial.config.DatabaseConfig;
+import org.mindrot.jbcrypt.BCrypt;
 import parcial.User;
 
 import javax.servlet.http.Cookie;
@@ -82,17 +83,23 @@ public class SurveyController {
         try {
             User registerRequest = ctx.bodyAsClass(User.class);
             if (registerRequest.getUsername() != null && registerRequest.getPassword() != null) {
+                // Hash the password before storing it
+                String hashedPassword = BCrypt.hashpw(registerRequest.getPassword(), BCrypt.gensalt());
+                registerRequest.setPassword(hashedPassword);
+                
                 Session session = sessionFactory.openSession();
                 Transaction transaction = session.beginTransaction();
                 session.persist(registerRequest);
                 transaction.commit();
                 session.close();
-                ctx.status(201).result("User registered successfully");
+                
+                ctx.status(201).json(Map.of("message", "User registered successfully"));
             } else {
-                ctx.status(400).result("Invalid registration details");
+                ctx.status(400).json(Map.of("error", "Invalid registration details"));
             }
         } catch (Exception e) {
-            ctx.status(400).result("Invalid request format");
+            e.printStackTrace();
+            ctx.status(400).json(Map.of("error", "Registration failed: " + e.getMessage()));
         }
     }
 
