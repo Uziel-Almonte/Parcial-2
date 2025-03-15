@@ -115,7 +115,7 @@
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
                     timestamp: new Date(),
-                    synced: false
+                    synced: false // Start as unsynced until confirmed saved
                 };
 
                 await saveSurvey(survey);
@@ -166,27 +166,41 @@
                 return;
             }
 
-            const unsynced = await db.surveys.where('synced').equals(false).toArray();
-            
-            for (const survey of unsynced) {
-                try {
-                    const response = await fetch('/api/surveys', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify(survey)
-                    });
+            const keys = await surveyStore.keys();
+            for (const key of keys) {
+                const survey = await surveyStore.getItem(key);
+                if (!survey.synced) {
+                    try {
+                        console.log("Attempting to sync survey:", survey);
+                        const response = await fetch('/api/surveys', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify(survey)
+                        });
 
-                    if (response.ok) {
-                        await db.surveys.update(survey.id, { synced: true });
+                        if (response.ok) {
+                            const savedSurvey = await response.json();
+                            console.log('Survey synced successfully:', savedSurvey);
+                            
+                            survey.synced = true;
+                            await surveyStore.setItem(key, survey);
+                            
+                            // Broadcast updated survey status to WebSocket if needed
+                            console.log('Survey marked as synced in local storage');
+                        } else {
+                            console.error('Failed to sync survey:', await response.text());
+                        }
+                    } catch (error) {
+                        console.error('Sync error:', error);
                     }
-                } catch (error) {
-                    console.error('Sync error:', error);
                 }
             }
+            
             updateStoredSurveys();
+            console.log('Sync complete');
         }
 
         // Update stored surveys list
@@ -235,7 +249,14 @@
         ws.onmessage = (event) => {
             const survey = JSON.parse(event.data);
             console.log("New survey received:", survey);
+
+            // Add to the list
             addSurveyToList(survey);
+
+            // Save locally if not already present
+            surveyStore.setItem(survey.id, survey).catch((error) => {
+                console.error("Error saving survey locally:", error);
+            });
         };
 
         ws.onclose = () => {

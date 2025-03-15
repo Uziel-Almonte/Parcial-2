@@ -44,10 +44,6 @@ dependencies {
     // Add JSON support
     implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
     
-    // Add websocket support
-    //implementation("org.eclipse.jetty.websocket:websocket-server:9.4.51.v20230217")
-    //implementation("org.eclipse.jetty.websocket:websocket-servlet:9.4.51.v20230217")
-    
     // Add template engine
     implementation("org.thymeleaf:thymeleaf:3.1.2.RELEASE")
 

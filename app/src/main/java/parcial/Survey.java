@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.util.Date;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonCreator;
 
 @Entity
 @Table(name = "surveys")
@@ -39,7 +40,19 @@ public class Survey {
         MEDIUM,
         UNIVERSITY,
         POSTGRADUATE,
-        DOCTORATE
+        DOCTORATE;
+        
+        @JsonCreator
+        public static EducationLevel fromString(String value) {
+            if (value == null || value.isEmpty()) {
+                return BASIC;
+            }
+            try {
+                return valueOf(value);
+            } catch (Exception e) {
+                return BASIC;
+            }
+        }
     }
 
     public Long getId() {

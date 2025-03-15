@@ -35,7 +35,8 @@ public class SurveyController {
         app.post("/api/auth/login", this::login);
         app.post("/api/auth/register", this::register);
         app.post("/api/surveys", this::createSurvey);
-        app.get("/api/surveys", this::getAllSurveys);
+        //app.get("/api/surveys", this::getAllSurveys);
+        app.get("/api/surveys", this::getAllSyncedSurveys);
         app.get("/api/surveys/{id}", this::getSurveyById);
         app.put("/api/surveys/{id}", this::updateSurvey);
         app.delete("/api/surveys/{id}", this::deleteSurvey);
@@ -97,15 +98,25 @@ public class SurveyController {
 
     private void createSurvey(Context ctx) {
         try {
-            Survey survey = ctx.bodyAsClass(Survey.class); // Parse survey from request body
+            Survey survey = ctx.bodyAsClass(Survey.class);
+            
+            // Provide default education level if null
+            if (survey.getEducationLevel() == null) {
+                survey.setEducationLevel(Survey.EducationLevel.BASIC); // Use BASIC as default
+            }
+            
+            // Ensure synced is set to true when saving to database
+            if (survey.getSynced() == null) {
+                survey.setSynced(true);
+            }
 
             try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
                 Transaction transaction = session.beginTransaction();
-                session.persist(survey); // Save survey to the database
+                session.persist(survey);
                 transaction.commit();
             }
 
-            ctx.status(201).json(Map.of("message", "Survey saved successfully!"));
+            ctx.status(201).json(survey);
         } catch (Exception e) {
             e.printStackTrace();
             ctx.status(500).json(Map.of("error", "Failed to save survey."));
@@ -113,14 +124,23 @@ public class SurveyController {
     }
 
     private void getAllSurveys(Context ctx) {
-        Session session = sessionFactory.openSession();
-        try {
-            List<Survey> surveys = session.createQuery("FROM Survey ORDER BY timestamp DESC", Survey.class).list();
+        try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
+            List<Survey> surveys = session.createQuery("FROM Survey", Survey.class).list();
+            ctx.json(surveys); // Send surveys as JSON response
+        } catch (Exception e) {
+            e.printStackTrace();
+            ctx.status(500).json(Map.of("error", "Failed to retrieve surveys."));
+        }
+    }
+
+    private void getAllSyncedSurveys(Context ctx) {
+        try (Session session = DatabaseConfig.getSessionFactory().openSession()) {
+            // Query only surveys with synced = true
+            List<Survey> surveys = session.createQuery("FROM Survey WHERE synced = true", Survey.class).list();
             ctx.json(surveys);
         } catch (Exception e) {
-            ctx.status(500).result("Error fetching surveys: " + e.getMessage());
-        } finally {
-            session.close();
+            e.printStackTrace();
+            ctx.status(500).json(Map.of("error", "Failed to retrieve synced surveys"));
         }
     }
 
